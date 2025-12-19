@@ -1,0 +1,2327 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>高端家具虚拟展厅 v2.5 | Premium Furniture Showroom</title>
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Three.js Importmap -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            overflow: hidden;
+            background: #1a1a1a;
+            touch-action: none;
+        }
+        
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            position: fixed;
+            top: 0;
+            left: 0;
+        }
+        
+        .panel {
+            backdrop-filter: blur(12px);
+            background: rgba(0, 0, 0, 0.92);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .btn-furniture {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+        
+        .btn-furniture:hover {
+            background: rgba(255, 255, 255, 0.12);
+            transform: translateY(-2px);
+        }
+        
+        /* Mobile Bottom Sheet */
+        .side-drawer {
+            transform: translateX(-100%);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .side-drawer.open {
+            transform: translateX(0);
+        }
+        
+        .drawer-overlay {
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+        
+        .drawer-overlay.show {
+            opacity: 1;
+            pointer-events: all;
+        }
+        
+        @media (min-width: 768px) {
+            .side-drawer {
+                transform: translateX(0) !important;
+            }
+            
+            .drawer-overlay {
+                display: none !important;
+            }
+            
+            .mobile-menu-btn {
+                display: none !important;
+            }
+        }
+        
+        /* Collision Warning */
+        .collision-warning {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(239, 68, 68, 0.95);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: 600;
+            z-index: 1000;
+            animation: shake 0.5s;
+        }
+        
+        .underground-warning {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(251, 191, 36, 0.95);
+            color: #1F2937;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: 600;
+            z-index: 1000;
+            animation: pulse 2s ease-in-out infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        
+        @keyframes shake {
+            0%, 100% { transform: translateX(-50%) translateY(0); }
+            25% { transform: translateX(-50%) translateY(-5px); }
+            75% { transform: translateX(-50%) translateY(5px); }
+        }
+        
+        /* Selection Menu */
+        .selection-menu {
+            position: fixed;
+            background: rgba(0, 0, 0, 0.95);
+            border: 2px solid #00BFFF;
+            border-radius: 8px;
+            padding: 8px 0;
+            min-width: 180px;
+            z-index: 2000;
+            box-shadow: 0 8px 24px rgba(0, 191, 255, 0.3);
+            backdrop-filter: blur(12px);
+        }
+        
+        .selection-menu-item {
+            padding: 10px 16px;
+            color: white;
+            cursor: pointer;
+            transition: all 0.2s;
+            border-left: 3px solid transparent;
+            font-size: 14px;
+        }
+        
+        .selection-menu-item:hover {
+            background: rgba(0, 191, 255, 0.2);
+            border-left-color: #00BFFF;
+            padding-left: 20px;
+        }
+        
+        .selection-menu-header {
+            padding: 6px 16px;
+            color: #00BFFF;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            border-bottom: 1px solid rgba(0, 191, 255, 0.3);
+            margin-bottom: 4px;
+        }
+        
+        /* Context Toolbar */
+        .context-toolbar {
+            position: fixed;
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid #FFAA00;
+            border-radius: 12px;
+            padding: 8px;
+            display: flex;
+            gap: 8px;
+            z-index: 1500;
+            box-shadow: 0 4px 16px rgba(255, 170, 0, 0.4);
+            backdrop-filter: blur(8px);
+            transform: translate(-50%, -120%);
+        }
+        
+        .toolbar-btn {
+            width: 36px;
+            height: 36px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            color: white;
+            font-size: 18px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .toolbar-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(1.1);
+        }
+        
+        .toolbar-btn.active {
+            background: #FFAA00;
+            border-color: #FFAA00;
+            box-shadow: 0 0 12px rgba(255, 170, 0, 0.6);
+        }
+    </style>
+</head>
+<body>
+    <div id="canvas-container"></div>
+    
+    <!-- 移动端遮罩层 -->
+    <div id="drawer-overlay" class="drawer-overlay fixed inset-0 bg-black bg-opacity-50 z-30" style="display: none;"></div>
+    
+    <!-- 侧边栏菜单 -->
+    <div id="furniture-panel" class="side-drawer panel fixed md:left-4 md:top-4 md:w-80 md:rounded-2xl 
+                left-0 top-0 bottom-0 w-80 rounded-r-2xl max-h-screen overflow-y-auto z-40">
+        
+        <div class="p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-2xl font-bold text-white">🏠 展厅控制台</h2>
+                <button id="close-drawer-btn" class="md:hidden text-white text-2xl">×</button>
+            </div>
+            
+            <!-- 标签页切换 -->
+            <div class="flex mb-4 bg-gray-800 rounded-lg p-1">
+                <button id="tab-scene" class="tab-btn flex-1 py-2 px-3 rounded-md text-sm font-medium text-white bg-blue-600">
+                    ⚙️ 场景
+                </button>
+                <button id="tab-furniture" class="tab-btn flex-1 py-2 px-3 rounded-md text-sm font-medium text-gray-400">
+                    📦 家具库
+                </button>
+            </div>
+            
+            <!-- 场景控制内容 -->
+            <div id="content-scene" class="tab-content">
+                <div class="mb-4">
+                    <label class="block text-gray-300 text-sm mb-2 font-medium">房间大小</label>
+                    <select id="room-size" class="w-full p-2.5 rounded-lg bg-gray-800 text-white border border-gray-600">
+                        <option value="mini">3畳 (超小) - 2.5×2.0m</option>
+                        <option value="small">4.5畳 (小) - 3.0×2.6m</option>
+                        <option value="medium" selected>8畳 (中) - 4.2×3.1m</option>
+                        <option value="large">12畳 (大) - 5.4×3.9m</option>
+                        <option value="xlarge">18畳 (特大) - 6.8×4.8m</option>
+                        <option value="xxlarge">24畳 (超大) - 8.2×5.8m</option>
+                        <option value="custom">🎨 自定义尺寸...</option>
+                    </select>
+                </div>
+                
+                <!-- 自定义房间尺寸输入 -->
+                <div id="custom-room-inputs" class="mb-4 space-y-3" style="display: none;">
+                    <div class="bg-gray-800 p-4 rounded-lg">
+                        <p class="text-gray-300 text-xs mb-3">💡 输入自定义房间尺寸（单位：米）</p>
+                        <div class="grid grid-cols-3 gap-2">
+                            <div>
+                                <label class="block text-gray-400 text-xs mb-1">宽度</label>
+                                <input type="number" id="custom-width" value="5.0" min="2" max="20" step="0.1" 
+                                       class="w-full p-2 rounded bg-gray-700 text-white text-sm border border-gray-600">
+                            </div>
+                            <div>
+                                <label class="block text-gray-400 text-xs mb-1">深度</label>
+                                <input type="number" id="custom-depth" value="4.0" min="2" max="20" step="0.1" 
+                                       class="w-full p-2 rounded bg-gray-700 text-white text-sm border border-gray-600">
+                            </div>
+                            <div>
+                                <label class="block text-gray-400 text-xs mb-1">高度</label>
+                                <input type="number" id="custom-height" value="2.4" min="2" max="5" step="0.1" 
+                                       class="w-full p-2 rounded bg-gray-700 text-white text-sm border border-gray-600">
+                            </div>
+                        </div>
+                        <button id="apply-custom-room" class="w-full mt-3 p-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold">
+                            ✅ 应用自定义尺寸
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="mb-4">
+                    <label class="flex items-center cursor-pointer p-3 bg-gray-800 rounded-lg hover:bg-gray-700">
+                        <input type="checkbox" id="toggle-room" checked class="mr-3 w-5 h-5">
+                        <span class="text-gray-300 text-sm font-medium">显示房间墙壁</span>
+                    </label>
+                </div>
+                
+                <div class="mb-4">
+                    <label class="flex items-center cursor-pointer p-3 bg-gray-800 rounded-lg hover:bg-gray-700">
+                        <input type="checkbox" id="toggle-person" class="mr-3 w-5 h-5">
+                        <span class="text-gray-300 text-sm font-medium">显示比例参照人 (1.6m)</span>
+                    </label>
+                </div>
+                
+                <div class="mb-4">
+                    <label class="flex items-center cursor-pointer p-3 bg-gray-800 rounded-lg hover:bg-gray-700">
+                        <input type="checkbox" id="toggle-sound" checked class="mr-3 w-5 h-5">
+                        <span class="text-gray-300 text-sm font-medium">🔊 开启音效</span>
+                    </label>
+                </div>
+                
+                <button id="clear-scene" class="w-full p-3 rounded-lg bg-red-600 hover:bg-red-700 text-white font-semibold">
+                    🗑️ 清空场景
+                </button>
+                
+                <button id="export-image" class="w-full p-3 rounded-lg bg-green-600 hover:bg-green-700 text-white font-semibold mt-3">
+                    📷 导出当前视角 (JPG)
+                </button>
+                
+                <div class="mt-6 p-4 bg-blue-900 bg-opacity-30 rounded-lg border border-blue-500">
+                    <h3 class="text-blue-300 font-semibold mb-2">💡 使用提示</h3>
+                    <ul class="text-gray-300 text-xs space-y-1">
+                        <li>• 家具生成在视线中心</li>
+                        <li>• 点击物体拖动箭头移动</li>
+                        <li>• 红色表示碰撞警告</li>
+                        <li>• Delete键删除选中</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <!-- 家具库内容 -->
+            <div id="content-furniture" class="tab-content" style="display: none;">
+                <div class="mb-4">
+                    <input type="text" id="furniture-search" 
+                           placeholder="🔍 搜索家具..." 
+                           class="w-full p-2 rounded-lg bg-gray-800 text-white border border-gray-600 focus:border-blue-500 outline-none">
+                </div>
+                
+                <!-- 自定义尺寸生成器 -->
+                <div class="mb-4">
+                    <button id="custom-spawner-header" class="w-full p-2 rounded-lg bg-gray-700 text-white text-left font-semibold flex items-center justify-between">
+                        <span>🛠️ 自定义尺寸</span>
+                        <span class="custom-arrow">▶</span>
+                    </button>
+                    <div id="custom-spawner-content" class="mt-2 bg-gray-800 p-4 rounded-lg" style="display: none;">
+                        <p class="text-gray-300 text-xs mb-3">💡 生成指定尺寸的占位符（单位：米）</p>
+                        <div class="grid grid-cols-3 gap-2 mb-3">
+                            <div>
+                                <label class="block text-gray-400 text-xs mb-1">宽 (W)</label>
+                                <input type="number" id="custom-w" value="1.0" min="0.1" max="5.0" step="0.1" 
+                                       class="w-full p-2 rounded bg-gray-700 text-white text-sm border border-gray-600">
+                            </div>
+                            <div>
+                                <label class="block text-gray-400 text-xs mb-1">深 (D)</label>
+                                <input type="number" id="custom-d" value="1.0" min="0.1" max="5.0" step="0.1" 
+                                       class="w-full p-2 rounded bg-gray-700 text-white text-sm border border-gray-600">
+                            </div>
+                            <div>
+                                <label class="block text-gray-400 text-xs mb-1">高 (H)</label>
+                                <input type="number" id="custom-h" value="0.8" min="0.1" max="5.0" step="0.1" 
+                                       class="w-full p-2 rounded bg-gray-700 text-white text-sm border border-gray-600">
+                            </div>
+                        </div>
+                        <button id="spawn-custom-btn" class="w-full p-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold">
+                            ✨ 生成 (Spawn)
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="space-y-2" id="furniture-list"></div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 移动端菜单按钮 -->
+    <button id="mobile-menu-btn" class="mobile-menu-btn md:hidden fixed left-4 bottom-4 z-50 w-14 h-14 rounded-full bg-blue-600 text-white shadow-lg flex items-center justify-center text-2xl">
+        ☰
+    </button>
+    
+    <!-- 碰撞警告 -->
+    <div id="collision-warning" class="collision-warning" style="display: none;">
+        🚫 碰撞检测：无法放置在此位置
+    </div>
+    
+    <!-- 地下警告 -->
+    <div id="underground-warning" class="underground-warning" style="display: none;">
+        ⚠️ 注意：部分位于地下
+    </div>
+    
+    <!-- 选择菜单 -->
+    <div id="selection-menu" class="selection-menu" style="display: none;"></div>
+    
+    <!-- 上下文工具栏 -->
+    <div id="context-toolbar" class="context-toolbar" style="display: none;">
+        <button class="toolbar-btn" id="btn-delete" title="删除">🗑️</button>
+        <button class="toolbar-btn" id="btn-ground" title="回到地面">⬇️</button>
+    </div>
+    
+    <!-- 欢迎引导 -->
+    <div id="welcome-guide" class="fixed inset-0 bg-black bg-opacity-70 z-50 flex items-center justify-center" style="display: flex;">
+        <div class="bg-gray-900 rounded-2xl p-8 max-w-md mx-4 border-2 border-blue-500 shadow-2xl">
+            <h2 class="text-3xl font-bold text-white mb-4 text-center">🏠 欢迎来到虚拟展厅</h2>
+            <div class="text-gray-300 space-y-3 mb-6">
+                <p class="text-sm">✨ 交互式 3D 家具展示空间</p>
+                <div class="bg-gray-800 p-4 rounded-lg">
+                    <p class="font-semibold text-blue-400 mb-2">快速开始：</p>
+                    <ul class="text-xs space-y-1.5">
+                        <li>🖱️ <span class="text-white">鼠标拖动</span> - 旋转视角</li>
+                        <li>🔍 <span class="text-white">滚轮缩放</span> - 远近调节</li>
+                        <li>📦 <span class="text-white">点击左下角</span> - 打开菜单</li>
+                        <li>🎯 <span class="text-white">点击物体</span> - 拖动移动</li>
+                    </ul>
+                </div>
+            </div>
+            <button id="start-btn" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition-colors">
+                开始体验 →
+            </button>
+        </div>
+    </div>
+    
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { TransformControls } from 'three/addons/controls/TransformControls.js';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+        
+        // ==================== 音效系统 ====================
+        // ==================== 音效系统（MP3背景乐 + 交互音效） ====================
+        class SoundManager {
+            constructor() {
+                this.ctx = null;
+                this.enabled = true;
+                this.initialized = false;
+                this.masterGain = null;
+                this.bgMusic = null; // 背景音乐 Audio 元素
+            }
+            
+            init() {
+                if (this.initialized) return;
+                try {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    this.ctx = new AudioContext();
+                    this.masterGain = this.ctx.createGain();
+                    this.masterGain.gain.value = 0.3; // 全局音量
+                    this.masterGain.connect(this.ctx.destination);
+                    
+                    // 创建背景音乐元素
+                    this.bgMusic = new Audio('./furniture-showroom-assets/bgm.mp3');
+                    this.bgMusic.loop = true;
+                    this.bgMusic.volume = 0.4; // 背景音乐音量
+                    
+                    this.initialized = true;
+                    console.log('✅ 音效引擎启动（MP3背景乐）');
+                    
+                    // 初始化后自动播放背景音乐
+                    if (this.enabled) this.startAmbient();
+                    
+                } catch (e) {
+                    console.warn('⚠️ 音效系统初始化失败:', e);
+                }
+            }
+            
+            // --- 背景音乐控制 ---
+            startAmbient() {
+                if (this.bgMusic && this.enabled) {
+                    this.bgMusic.play().catch(e => {
+                        console.log('🎵 背景音乐需要用户交互后播放');
+                    });
+                }
+            }
+
+            stopAmbient() {
+                if (this.bgMusic) {
+                    this.bgMusic.pause();
+                    this.bgMusic.currentTime = 0;
+                }
+            }
+
+            // 通用发声函数（用于交互音效）
+            playTone(freq, attack, decay, type = 'sine') {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                
+                osc.type = type;
+                osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                
+                // 包络 (Envelope)
+                gain.gain.setValueAtTime(0, this.ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.3, this.ctx.currentTime + attack);
+                gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + attack + decay);
+                
+                osc.connect(gain);
+                gain.connect(this.masterGain);
+                
+                osc.start();
+                osc.stop(this.ctx.currentTime + attack + decay + 0.1);
+            }
+
+            // --- 交互音效 ---
+            playSelect() { 
+                // 清脆的高音 (Ding)
+                this.playTone(1200, 0.01, 0.15, 'sine'); 
+            }
+            
+            playPop() { 
+                // 气泡声 (频率滑动的 Sine)
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.frequency.setValueAtTime(300, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(600, this.ctx.currentTime + 0.1);
+                gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 0.1);
+                osc.connect(gain);
+                gain.connect(this.masterGain);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.1);
+            }
+
+            // 开关控制
+            set enabled(val) {
+                this._enabled = val;
+                if (val) {
+                    if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+                    this.startAmbient();
+                } else {
+                    if (this.ctx) this.ctx.suspend();
+                    this.stopAmbient();
+                }
+            }
+            get enabled() { return this._enabled; }
+        }
+        
+        const soundManager = new SoundManager();
+        
+        // ==================== 全局变量 ====================
+        let scene, camera, renderer, controls, transformControl;
+        let proceduralRoomGroup, referencePerson, floorPlane;
+        let selectedObject = null;
+        let furnitureObjects = [];
+        let gltfLoader;
+        let lastValidPosition = new THREE.Vector3();
+        
+        const roomSizes = {
+            mini: { width: 2.5, depth: 2.0, height: 2.4 },
+            small: { width: 3.0, depth: 2.6, height: 2.4 },
+            medium: { width: 4.2, depth: 3.1, height: 2.4 },
+            large: { width: 5.4, depth: 3.9, height: 2.4 },
+            xlarge: { width: 6.8, depth: 4.8, height: 2.7 },
+            xxlarge: { width: 8.2, depth: 5.8, height: 3.0 },
+            custom: { width: 5.0, depth: 4.0, height: 2.4 }
+        };
+        let currentRoomSize = 'medium';
+        let showRoom = true;
+        
+        const furnitureConfigs = [
+            { id: 'sofa-1', name: '三人沙发', type: 'sofa', width: 2.2, height: 0.85, depth: 0.9, color: 0xB8A694 },
+            { id: 'sofa-2', name: 'L型沙发', type: 'l-sofa', width: 2.4, height: 0.85, depth: 2.4, color: 0x8B7D6B },
+            { id: 'bed-1', name: '双人床', type: 'bed', width: 2.0, height: 0.6, depth: 2.2, color: 0x8B7355 },
+            { id: 'table-1', name: '餐桌', type: 'table', width: 1.4, height: 0.75, depth: 0.9, color: 0xA0826D },
+            { id: 'coffee-1', name: '茶几', type: 'coffeeTable', width: 1.2, height: 0.4, depth: 0.6, color: 0x9B8B7E },
+            { id: 'desk-1', name: '书桌组合', type: 'desk-setup', width: 1.4, height: 0.75, depth: 0.7, color: 0x8B7355 },
+            { id: 'chair-1', name: '餐椅', type: 'chair', width: 0.45, height: 0.85, depth: 0.5, color: 0xA0826D },
+            { id: 'armchair-1', name: '扶手椅', type: 'armchair', width: 0.8, height: 0.9, depth: 0.85, color: 0xB8A694 },
+            { id: 'wardrobe-1', name: '衣柜', type: 'wardrobe', width: 1.8, height: 2.2, depth: 0.6, color: 0x8B7355 },
+            { id: 'shelf-1', name: '书架', type: 'shelf', width: 1.2, height: 1.8, depth: 0.35, color: 0xA0826D },
+            { id: 'tv-stand-1', name: '电视柜', type: 'tv-stand', width: 1.5, height: 0.5, depth: 0.4, color: 0x9B8B7E },
+            { id: 'lamp-1', name: '落地灯', type: 'floor-lamp', width: 0.3, height: 1.6, depth: 0.3, color: 0x2C2C2C },
+            { id: 'plant-1', name: '盆栽植物', type: 'plant', width: 0.4, height: 0.8, depth: 0.4, color: 0x8B7355 },
+            { id: 'rug-1', name: '圆形地毯', type: 'round-rug', width: 1.5, height: 0.01, depth: 1.5, color: 0xC8B8A8 }
+        ];
+        
+        // ==================== 初始化 ====================
+        function init() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xF5F5F0);
+            scene.fog = new THREE.Fog(0xE8E8E0, 15, 35);
+            
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
+            camera.position.set(3, 2.5, 5);
+            
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            document.getElementById('canvas-container').appendChild(renderer.domElement);
+            
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.minDistance = 1;
+            controls.maxDistance = 15;
+            controls.maxPolarAngle = Math.PI / 2 - 0.05;
+            controls.target.set(0, 0.5, 0);
+            controls.touches = {
+                ONE: THREE.TOUCH.ROTATE,
+                TWO: THREE.TOUCH.DOLLY_PAN
+            };
+            
+            transformControl = new TransformControls(camera, renderer.domElement);
+            transformControl.setMode('translate');
+            transformControl.setSpace('world');
+            transformControl.showX = true;
+            transformControl.showY = true;
+            transformControl.showZ = true;
+            scene.add(transformControl);
+            
+            gltfLoader = new GLTFLoader();
+            
+            createGround();
+            
+            const ambientLight = new THREE.AmbientLight(0xFFF8E1, 0.8);
+            scene.add(ambientLight);
+            
+            const mainLight = new THREE.DirectionalLight(0xFFE8C5, 1.5);
+            mainLight.position.set(5, 8, 5);
+            mainLight.castShadow = true;
+            mainLight.shadow.mapSize.width = 2048;
+            mainLight.shadow.mapSize.height = 2048;
+            scene.add(mainLight);
+            
+            const fillLight = new THREE.DirectionalLight(0xFFD4A3, 0.6);
+            fillLight.position.set(-5, 3, -5);
+            scene.add(fillLight);
+            
+            createProceduralRoom();
+            generateFurnitureUI();
+            setupEventListeners();
+            
+            animate();
+        }
+        
+        function createGround() {
+            const groundGeometry = new THREE.PlaneGeometry(50, 50);
+            const groundMaterial = new THREE.ShadowMaterial({ opacity: 0.3 });
+            const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            scene.add(ground);
+            
+            // Create floor plane for raycasting
+            floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+            
+            const gridHelper = new THREE.GridHelper(50, 50, 0x444444, 0x222222);
+            gridHelper.material.opacity = 0.2;
+            gridHelper.material.transparent = true;
+            scene.add(gridHelper);
+        }
+        
+        function createProceduralRoom() {
+            clearProceduralRoom();
+            if (!showRoom) return;
+            
+            proceduralRoomGroup = new THREE.Group();
+            const size = roomSizes[currentRoomSize];
+            const wallMaterial = new THREE.MeshStandardMaterial({
+                color: 0xE8E4DC,
+                roughness: 0.9,
+                metalness: 0.01,
+                side: THREE.DoubleSide
+            });
+            
+            const floorMaterial = new THREE.MeshStandardMaterial({
+                color: 0xD4C4B0,
+                roughness: 0.8,
+                metalness: 0.03
+            });
+            
+            const floor = new THREE.Mesh(
+                new THREE.PlaneGeometry(size.width, size.depth),
+                floorMaterial
+            );
+            floor.rotation.x = -Math.PI / 2;
+            floor.position.y = 0.001;
+            floor.receiveShadow = true;
+            proceduralRoomGroup.add(floor);
+            
+            // 后墙（中间挖空作为窗户）
+            const windowWidth = Math.min(size.width * 0.4, 1.5);
+            const windowHeight = Math.min(size.height * 0.5, 1.2);
+            const windowY = size.height * 0.6;
+            
+            // 计算墙的各部分尺寸
+            const wallZ = -size.depth / 2;
+            const windowBottom = windowY - windowHeight / 2;
+            const windowTop = windowY + windowHeight / 2;
+            
+            // 上部分墙（窗户上方）
+            const topWallHeight = size.height - windowTop;
+            if (topWallHeight > 0.1) {
+                const topWall = new THREE.Mesh(
+                    new THREE.BoxGeometry(size.width, topWallHeight, 0.15),
+                    wallMaterial
+                );
+                topWall.position.set(0, windowTop + topWallHeight / 2, wallZ);
+                topWall.castShadow = true;
+                proceduralRoomGroup.add(topWall);
+            }
+            
+            // 下部分墙（窗户下方）
+            if (windowBottom > 0.1) {
+                const bottomWall = new THREE.Mesh(
+                    new THREE.BoxGeometry(size.width, windowBottom, 0.15),
+                    wallMaterial
+                );
+                bottomWall.position.set(0, windowBottom / 2, wallZ);
+                bottomWall.castShadow = true;
+                proceduralRoomGroup.add(bottomWall);
+            }
+            
+            // 左部分墙（窗户左侧）
+            const leftWallWidth = (size.width - windowWidth) / 2;
+            if (leftWallWidth > 0.1) {
+                const leftWallPart = new THREE.Mesh(
+                    new THREE.BoxGeometry(leftWallWidth, windowHeight, 0.15),
+                    wallMaterial
+                );
+                leftWallPart.position.set(-size.width / 2 + leftWallWidth / 2, windowY, wallZ);
+                leftWallPart.castShadow = true;
+                proceduralRoomGroup.add(leftWallPart);
+            }
+            
+            // 右部分墙（窗户右侧）
+            if (leftWallWidth > 0.1) {
+                const rightWallPart = new THREE.Mesh(
+                    new THREE.BoxGeometry(leftWallWidth, windowHeight, 0.15),
+                    wallMaterial
+                );
+                rightWallPart.position.set(size.width / 2 - leftWallWidth / 2, windowY, wallZ);
+                rightWallPart.castShadow = true;
+                proceduralRoomGroup.add(rightWallPart);
+            }
+            
+            // 窗框
+            const windowFrameMaterial = new THREE.MeshStandardMaterial({
+                color: 0xFFFFFF,
+                roughness: 0.3,
+                metalness: 0.7
+            });
+            
+            const frameThickness = 0.05;
+            const frameDepth = 0.16;
+            
+            // 上框
+            const topFrame = new THREE.Mesh(
+                new THREE.BoxGeometry(windowWidth + frameThickness * 2, frameThickness, frameDepth),
+                windowFrameMaterial
+            );
+            topFrame.position.set(0, windowY + windowHeight / 2, wallZ);
+            proceduralRoomGroup.add(topFrame);
+            
+            // 下框
+            const bottomFrame = new THREE.Mesh(
+                new THREE.BoxGeometry(windowWidth + frameThickness * 2, frameThickness, frameDepth),
+                windowFrameMaterial
+            );
+            bottomFrame.position.set(0, windowY - windowHeight / 2, wallZ);
+            proceduralRoomGroup.add(bottomFrame);
+            
+            // 左框
+            const leftFrame = new THREE.Mesh(
+                new THREE.BoxGeometry(frameThickness, windowHeight, frameDepth),
+                windowFrameMaterial
+            );
+            leftFrame.position.set(-windowWidth / 2, windowY, wallZ);
+            proceduralRoomGroup.add(leftFrame);
+            
+            // 右框
+            const rightFrame = new THREE.Mesh(
+                new THREE.BoxGeometry(frameThickness, windowHeight, frameDepth),
+                windowFrameMaterial
+            );
+            rightFrame.position.set(windowWidth / 2, windowY, wallZ);
+            proceduralRoomGroup.add(rightFrame);
+            
+            const leftWall = new THREE.Mesh(
+                new THREE.BoxGeometry(0.15, size.height, size.depth),
+                wallMaterial
+            );
+            leftWall.position.set(-size.width / 2, size.height / 2, 0);
+            leftWall.castShadow = true;
+            proceduralRoomGroup.add(leftWall);
+            
+            const rightWall = new THREE.Mesh(
+                new THREE.BoxGeometry(0.15, size.height, size.depth),
+                wallMaterial
+            );
+            rightWall.position.set(size.width / 2, size.height / 2, 0);
+            rightWall.castShadow = true;
+            proceduralRoomGroup.add(rightWall);
+            
+            scene.add(proceduralRoomGroup);
+        }
+        
+        function clearProceduralRoom() {
+            if (proceduralRoomGroup) {
+                scene.remove(proceduralRoomGroup);
+                proceduralRoomGroup.traverse(child => {
+                    if (child.geometry) child.geometry.dispose();
+                    if (child.material) child.material.dispose();
+                });
+            }
+        }
+        
+        function createReferencePerson() {
+            if (referencePerson) {
+                clearReferencePerson();
+            }
+            
+            // 使用 GLTFLoader 加载 GLB 模型
+            gltfLoader.load(
+                './furniture-showroom-assets/typical_maid__original_work.glb',
+                (gltf) => {
+                    const model = gltf.scene;
+                    
+                    // === 1. 自动身高修正到 1.6m ===
+                    const box = new THREE.Box3().setFromObject(model);
+                    const originalHeight = box.max.y - box.min.y;
+                    const targetHeight = 1.6;  // 女性平均身高
+                    const scale = targetHeight / originalHeight;
+                    model.scale.set(scale, scale, scale);
+                    
+                    // === 2. 应用磨砂白半透明材质 ===
+                    const frostedMaterial = new THREE.MeshStandardMaterial({
+                        color: 0xffffff,        // 纯白
+                        roughness: 0.3,         // 稍微光滑，带一点反光
+                        metalness: 0.1,
+                        transparent: true,
+                        opacity: 0.5,           // 半透明
+                        side: THREE.DoubleSide, // 双面渲染，防止相机进入模型内部时消失或变白
+                        depthWrite: false       // 防止透明模型产生的深度遮挡错误
+                    });
+                    
+                    model.traverse((child) => {
+                        if (child.isMesh) {
+                            // 替换为磨砂白材质
+                            child.material = frostedMaterial;
+                            child.castShadow = true;
+                            child.receiveShadow = true;
+                        }
+                    });
+                    
+                    // === 3. 精确贴地并解决 Z-Fighting ===
+                    // 缩放后重新计算包围盒
+                    const boxAfterScale = new THREE.Box3().setFromObject(model);
+                    const bottomY = boxAfterScale.min.y;
+                    // 向上抬升 1cm 彻底避免与地面闪烁
+                    model.position.y = -bottomY + 0.01;
+                    
+                    // === 4. 位置设置 ===
+                    model.position.x = 0;
+                    model.position.z = -0.5;  // 场景中心偏后
+                    
+                    // === 5. 添加交互性标识 ===
+                    model.userData.furnitureId = 'REFERENCE_PERSON';
+                    model.userData.furnitureName = '比例参照人';
+                    model.userData.furnitureType = 'referencePerson';
+                    model.userData.originalY = model.position.y;
+                    
+                    // 设置为全局变量并添加到场景
+                    referencePerson = model;
+                    scene.add(referencePerson);
+                    furnitureObjects.push(referencePerson);
+                    
+                    console.log('✅ GLB模型参照人已加载（1.6m女性，磨砂白半透明，可拖拽）');
+                },
+                (xhr) => {
+                    // 加载进度
+                    if (xhr.total > 0) {
+                        const percent = (xhr.loaded / xhr.total * 100).toFixed(0);
+                        console.log(`⏳ 参照人模型加载中: ${percent}%`);
+                    }
+                },
+                (error) => {
+                    console.error('❌ GLB模型加载失败:', error);
+                    console.error('请确认文件路径: ./furniture-showroom-assets/typical_maid__original_work.glb');
+                    alert('模型加载失败，请确认文件路径：\n./furniture-showroom-assets/typical_maid__original_work.glb');
+                }
+            );
+        }
+        
+        function clearReferencePerson() {
+            if (referencePerson) {
+                scene.remove(referencePerson);
+                referencePerson.traverse(child => {
+                    if (child.geometry) child.geometry.dispose();
+                    if (child.material) {
+                        if (child.material.map) child.material.map.dispose();
+                        child.material.dispose();
+                    }
+                });
+                
+                const index = furnitureObjects.indexOf(referencePerson);
+                if (index > -1) {
+                    furnitureObjects.splice(index, 1);
+                }
+                
+                referencePerson = null;
+                console.log('🗑️ 比例参照人已移除');
+            }
+        }
+        
+        // LOOK-AT SPAWNING: Raycast to screen center
+        function getSpawnPosition() {
+            const raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+            
+            const intersectPoint = new THREE.Vector3();
+            if (raycaster.ray.intersectPlane(floorPlane, intersectPoint)) {
+                const size = roomSizes[currentRoomSize];
+                const maxX = size.width / 2 - 0.5;
+                const maxZ = size.depth / 2 - 0.5;
+                
+                intersectPoint.x = Math.max(-maxX, Math.min(maxX, intersectPoint.x));
+                intersectPoint.z = Math.max(-maxZ, Math.min(maxZ, intersectPoint.z));
+                return intersectPoint;
+            }
+            
+            return new THREE.Vector3(0, 0, 0);
+        }
+        
+        // 碰撞检测（仅XZ平面，忽略Y轴）
+        function checkCollision(object) {
+            if (!object) return false;
+            
+            const box1 = new THREE.Box3().setFromObject(object);
+            
+            // Check collision with other furniture (忽略参照人)
+            for (let otherObject of furnitureObjects) {
+                if (otherObject === object) continue;
+                
+                // 跳过参照人（幽灵模式，不阻挡家具）
+                if (otherObject.userData.furnitureType === 'referencePerson') {
+                    continue;
+                }
+                
+                const box2 = new THREE.Box3().setFromObject(otherObject);
+                if (box1.intersectsBox(box2)) {
+                    return true;
+                }
+            }
+            
+            // Check collision with room walls (仅检测XZ平面，彻底忽略Y轴)
+            if (showRoom && proceduralRoomGroup) {
+                const size = roomSizes[currentRoomSize];
+                const margin = 0.05; // 5cm safety margin
+                
+                // 只检测XZ边界，忽略Y轴（移除垂直碰撞检测）
+                const roomMinX = -size.width / 2 + margin;
+                const roomMaxX = size.width / 2 - margin;
+                const roomMinZ = -size.depth / 2 + margin;
+                const roomMaxZ = size.depth / 2 - margin;
+                
+                // 0.1m 容错空间
+                const tolerance = 0.1;
+                
+                if (box1.min.x < roomMinX - tolerance || 
+                    box1.max.x > roomMaxX + tolerance ||
+                    box1.min.z < roomMinZ - tolerance ||
+                    box1.max.z > roomMaxZ + tolerance) {
+                    return true;
+                }
+            }
+            
+            return false;
+        }
+        
+        // 检测物体是否在地下
+        function checkUnderground(object) {
+            if (!object) return false;
+            const box = new THREE.Box3().setFromObject(object);
+            // 给予2cm容错空间
+            return box.min.y < -0.02;
+        }
+        
+        function showCollisionWarning(show) {
+            document.getElementById('collision-warning').style.display = show ? 'block' : 'none';
+        }
+        
+        function showUndergroundWarning(show) {
+            document.getElementById('underground-warning').style.display = show ? 'block' : 'none';
+        }
+        
+        // 导出当前视角为JPG图片
+        function takeScreenshot() {
+            console.log('📷 开始截图...');
+            
+            // Step 1: 清理画面 - 临时隐藏控制器
+            const wasControlVisible = transformControl.visible;
+            const previousSelection = selectedObject;
+            
+            // 隐藏变换控制器
+            if (selectedObject) {
+                transformControl.detach();
+            }
+            transformControl.visible = false;
+            
+            // 临时隐藏工具栏
+            const toolbar = document.getElementById('context-toolbar');
+            const toolbarWasVisible = toolbar.style.display;
+            toolbar.style.display = 'none';
+            
+            // Step 2: 强制渲染最新画面
+            renderer.render(scene, camera);
+            
+            // Step 3: 获取图片数据
+            try {
+                const dataURL = renderer.domElement.toDataURL('image/jpeg', 1.0);
+                
+                // Step 4: 创建下载链接
+                const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+                const filename = `MyRoom_${timestamp}.jpg`;
+                
+                const link = document.createElement('a');
+                link.download = filename;
+                link.href = dataURL;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                
+                console.log(`✅ 截图已保存: ${filename}`);
+                
+                // 播放快门音效反馈
+                soundManager.playSelect();
+                
+            } catch (e) {
+                console.error('❌ 截图失败:', e);
+                alert('截图失败，请重试');
+            }
+            
+            // Step 5: 恢复画面
+            transformControl.visible = wasControlVisible;
+            if (previousSelection) {
+                transformControl.attach(previousSelection);
+            }
+            toolbar.style.display = toolbarWasVisible;
+        }
+        
+        // SOFT SPAWN: 智能搜寻空位，允许强制生成
+        function addFurniture(config) {
+            const furniture = createAestheticPlaceholder(config);
+            const spawnPos = getSpawnPosition();
+            furniture.position.copy(spawnPos);
+            furniture.position.y = 0;
+            
+            // === Step 1: 检查初始位置 ===
+            if (!checkCollision(furniture)) {
+                // 位置安全，直接使用
+                console.log(`✅ 安全位置: ${config.name} at (${furniture.position.x.toFixed(2)}, ${furniture.position.z.toFixed(2)})`);
+            } else {
+                // === Step 2: 碰撞！尝试寻找空位 ===
+                console.warn(`⚠️ 初始位置碰撞，尝试搜寻空位...`);
+                let foundSafeSpot = false;
+                const maxAttempts = 10;
+                
+                for (let attempt = 0; attempt < maxAttempts; attempt++) {
+                    // 在当前位置周围 0.5m ~ 1.0m 范围内随机偏移
+                    const radius = 0.5 + Math.random() * 0.5;
+                    const angle = Math.random() * Math.PI * 2;
+                    
+                    furniture.position.x = spawnPos.x + Math.cos(angle) * radius;
+                    furniture.position.z = spawnPos.z + Math.sin(angle) * radius;
+                    
+                    if (!checkCollision(furniture)) {
+                        foundSafeSpot = true;
+                        console.log(`✅ 找到安全位置 (尝试 ${attempt + 1}/${maxAttempts}): (${furniture.position.x.toFixed(2)}, ${furniture.position.z.toFixed(2)})`);
+                        break;
+                    }
+                }
+                
+                // === Step 3: 未找到空位，强制生成（软碰撞允许）===
+                if (!foundSafeSpot) {
+                    furniture.position.copy(spawnPos); // 恢复原始位置
+                    console.warn(`⚠️ 未找到完全无碰撞位置，强制在目标位置生成（用户可手动调整）`);
+                }
+            }
+            
+            // === Step 4: 添加到场景 ===
+            // [修改] 使用 currentHeight 来记录动态高度，初始为 0
+            furniture.userData.currentHeight = 0;
+            furniture.userData.furnitureId = config.id;
+            furniture.userData.furnitureName = config.name;
+            
+            scene.add(furniture);
+            furnitureObjects.push(furniture);
+            
+            // === Step 5: 设置初始有效位置 ===
+            lastValidPosition.copy(furniture.position);
+            
+            // === Step 6: 音效反馈 ===
+            soundManager.playPop();
+            
+            console.log(`📦 ${config.name} 已添加到场景 at (${furniture.position.x.toFixed(2)}, ${furniture.position.z.toFixed(2)})`);
+        }
+        
+        // EXPANDED PROCEDURAL LIBRARY
+        function createAestheticPlaceholder(config) {
+            const group = new THREE.Group();
+            
+            switch(config.type) {
+                case 'l-sofa':
+                    createLShapedSofa(group, config);
+                    break;
+                case 'desk-setup':
+                    createDeskSetup(group, config);
+                    break;
+                case 'round-rug':
+                    createRoundRug(group, config);
+                    break;
+                case 'sofa':
+                    createSofa(group, config);
+                    break;
+                case 'bed':
+                    createBed(group, config);
+                    break;
+                case 'table':
+                case 'coffeeTable':
+                    createTable(group, config);
+                    break;
+                case 'custom':
+                    createCustomPlaceholder(group, config);
+                    break;
+                default:
+                    createDefaultBox(group, config);
+            }
+            
+            return group;
+        }
+        
+        // 自定义占位符生成器（带线框效果）
+        function createCustomPlaceholder(group, config) {
+            // 半透明实体
+            const solidMaterial = new THREE.MeshStandardMaterial({
+                color: config.color,
+                roughness: 0.8,
+                metalness: 0.1,
+                transparent: true,
+                opacity: 0.3
+            });
+            
+            const solidBox = new THREE.Mesh(
+                new THREE.BoxGeometry(config.width, config.height, config.depth),
+                solidMaterial
+            );
+            solidBox.position.y = config.height / 2;
+            solidBox.castShadow = true;
+            group.add(solidBox);
+            
+            // 线框边缘（突出显示）
+            const wireframeGeometry = new THREE.EdgesGeometry(solidBox.geometry);
+            const wireframeMaterial = new THREE.LineBasicMaterial({ 
+                color: 0x00BFFF, 
+                linewidth: 2 
+            });
+            const wireframe = new THREE.LineSegments(wireframeGeometry, wireframeMaterial);
+            wireframe.position.y = config.height / 2;
+            group.add(wireframe);
+            
+            // 尺寸标签（文字模拟：添加小球标记）
+            const markerMaterial = new THREE.MeshBasicMaterial({ color: 0xFFFF00 });
+            const marker = new THREE.Mesh(
+                new THREE.SphereGeometry(0.05, 8, 8),
+                markerMaterial
+            );
+            marker.position.set(0, config.height + 0.1, 0);
+            group.add(marker);
+        }
+        
+        function createLShapedSofa(group, config) {
+            const fabricMaterial = new THREE.MeshStandardMaterial({
+                color: config.color,
+                roughness: 0.8,
+                metalness: 0.05
+            });
+            
+            const frameMaterial = new THREE.MeshStandardMaterial({
+                color: new THREE.Color(config.color).multiplyScalar(0.3),
+                roughness: 0.6,
+                metalness: 0.1
+            });
+            
+            // 主座底座
+            const mainWidth = config.width;
+            const mainDepth = config.depth * 0.4;
+            const baseHeight = config.height * 0.15;
+            
+            const mainBase = new THREE.Mesh(
+                new RoundedBoxGeometry(mainWidth, baseHeight, mainDepth, 3, 0.01),
+                frameMaterial
+            );
+            mainBase.position.set(0, baseHeight / 2, config.depth / 2 - mainDepth / 2);
+            mainBase.castShadow = true;
+            group.add(mainBase);
+            
+            // 主座坐垫 (3个)
+            const cushionWidth = (mainWidth - 0.06) / 3;
+            const cushionHeight = config.height * 0.35;
+            for (let i = 0; i < 3; i++) {
+                const cushion = new THREE.Mesh(
+                    new RoundedBoxGeometry(cushionWidth, cushionHeight, mainDepth * 0.9, 4, 0.03),
+                    fabricMaterial
+                );
+                cushion.position.set(
+                    -mainWidth / 2 + cushionWidth / 2 + i * (cushionWidth + 0.02),
+                    baseHeight + cushionHeight / 2,
+                    config.depth / 2 - mainDepth / 2
+                );
+                cushion.castShadow = true;
+                group.add(cushion);
+            }
+            
+            // 延伸座底座
+            const extWidth = config.width * 0.4;
+            const extDepth = config.depth;
+            const extBase = new THREE.Mesh(
+                new RoundedBoxGeometry(extWidth, baseHeight, extDepth, 3, 0.01),
+                frameMaterial
+            );
+            extBase.position.set(-config.width / 2 + extWidth / 2, baseHeight / 2, 0);
+            extBase.castShadow = true;
+            group.add(extBase);
+            
+            // 延伸座坐垫 (2个)
+            const extCushionDepth = (extDepth - 0.04) / 2;
+            for (let i = 0; i < 2; i++) {
+                const cushion = new THREE.Mesh(
+                    new RoundedBoxGeometry(extWidth * 0.9, cushionHeight, extCushionDepth, 4, 0.03),
+                    fabricMaterial
+                );
+                cushion.position.set(
+                    -config.width / 2 + extWidth / 2,
+                    baseHeight + cushionHeight / 2,
+                    -extDepth / 2 + extCushionDepth / 2 + i * (extCushionDepth + 0.02)
+                );
+                cushion.castShadow = true;
+                group.add(cushion);
+            }
+            
+            // L型靠背
+            const backHeight = config.height * 0.6;
+            const backThickness = 0.12;
+            
+            // 主座靠背
+            const mainBack = new THREE.Mesh(
+                new RoundedBoxGeometry(mainWidth, backHeight, backThickness, 4, 0.025),
+                fabricMaterial
+            );
+            mainBack.position.set(
+                0,
+                baseHeight + backHeight / 2,
+                config.depth / 2 - mainDepth - backThickness / 2 + 0.02
+            );
+            mainBack.rotation.x = -0.05;
+            mainBack.castShadow = true;
+            group.add(mainBack);
+            
+            // 延伸座靠背
+            const extBack = new THREE.Mesh(
+                new RoundedBoxGeometry(backThickness, backHeight, extDepth, 4, 0.025),
+                fabricMaterial
+            );
+            extBack.position.set(
+                -config.width / 2 + extWidth + backThickness / 2 - 0.02,
+                baseHeight + backHeight / 2,
+                0
+            );
+            extBack.castShadow = true;
+            group.add(extBack);
+            
+            // 扶手
+            const armWidth = 0.15;
+            const armHeight = config.height * 0.55;
+            const arm = new THREE.Mesh(
+                new RoundedBoxGeometry(armWidth, armHeight, mainDepth * 0.9, 4, 0.025),
+                fabricMaterial
+            );
+            arm.position.set(
+                config.width / 2 - armWidth / 2,
+                baseHeight + armHeight / 2,
+                config.depth / 2 - mainDepth / 2
+            );
+            arm.castShadow = true;
+            group.add(arm);
+        }
+        
+        function createDeskSetup(group, config) {
+            const woodMaterial = new THREE.MeshStandardMaterial({
+                color: config.color,
+                roughness: 0.5,
+                metalness: 0.1
+            });
+            
+            // 桌面 (圆角)
+            const topThickness = config.height * 0.06;
+            const desktop = new THREE.Mesh(
+                new RoundedBoxGeometry(config.width, topThickness, config.depth, 4, 0.015),
+                woodMaterial
+            );
+            desktop.position.y = config.height - topThickness / 2;
+            desktop.castShadow = true;
+            group.add(desktop);
+            
+            // 抽屉 (右侧)
+            const drawerWidth = config.width * 0.35;
+            const drawerHeight = config.height * 0.15;
+            const drawerDepth = config.depth * 0.9;
+            const drawer = new THREE.Mesh(
+                new RoundedBoxGeometry(drawerWidth, drawerHeight, drawerDepth, 3, 0.01),
+                woodMaterial
+            );
+            drawer.position.set(
+                config.width / 2 - drawerWidth / 2 - 0.05,
+                config.height - topThickness - drawerHeight / 2 - 0.05,
+                0
+            );
+            drawer.castShadow = true;
+            group.add(drawer);
+            
+            // 抽屉把手
+            const handleMaterial = new THREE.MeshStandardMaterial({
+                color: 0x333333,
+                roughness: 0.3,
+                metalness: 0.8
+            });
+            
+            const handle = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.008, 0.008, 0.08, 12),
+                handleMaterial
+            );
+            handle.rotation.z = Math.PI / 2;
+            handle.position.set(
+                config.width / 2 - drawerWidth / 2 - 0.05,
+                config.height - topThickness - drawerHeight / 2 - 0.05,
+                drawerDepth / 2 + 0.01
+            );
+            handle.castShadow = true;
+            group.add(handle);
+            
+            // 桌腿
+            const legHeight = config.height - topThickness - 0.02;
+            const legRadius = 0.025;
+            
+            const legPositions = [
+                [-config.width / 2 + 0.08, legHeight / 2, -config.depth / 2 + 0.08],
+                [-config.width / 2 + 0.08, legHeight / 2, config.depth / 2 - 0.08]
+            ];
+            
+            legPositions.forEach(pos => {
+                const leg = new THREE.Mesh(
+                    new THREE.CylinderGeometry(legRadius + 0.005, legRadius, legHeight, 16),
+                    woodMaterial
+                );
+                leg.position.set(pos[0], pos[1], pos[2]);
+                leg.castShadow = true;
+                group.add(leg);
+            });
+            
+            // 精致台灯
+            const lampX = -config.width * 0.25;
+            const lampZ = config.depth * 0.2;
+            
+            // 灯座
+            const lampBase = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.05, 0.06, 0.02, 20),
+                handleMaterial
+            );
+            lampBase.position.set(lampX, config.height + 0.01, lampZ);
+            lampBase.castShadow = true;
+            group.add(lampBase);
+            
+            // 灯杆
+            const lampPole = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.008, 0.008, 0.35, 12),
+                handleMaterial
+            );
+            lampPole.position.set(lampX, config.height + 0.195, lampZ);
+            lampPole.castShadow = true;
+            group.add(lampPole);
+            
+            // 灯罩 (圆锥形)
+            const lampShade = new THREE.Mesh(
+                new THREE.ConeGeometry(0.1, 0.12, 20),
+                new THREE.MeshStandardMaterial({ 
+                    color: 0xFFF8E1, 
+                    emissive: 0xFFE082, 
+                    emissiveIntensity: 0.4,
+                    side: THREE.DoubleSide
+                })
+            );
+            lampShade.position.set(lampX, config.height + 0.43, lampZ);
+            lampShade.castShadow = true;
+            group.add(lampShade);
+        }
+        
+        function createRoundRug(group, config) {
+            const rug = new THREE.Mesh(
+                new THREE.CylinderGeometry(config.width / 2, config.width / 2, config.height, 32),
+                new THREE.MeshStandardMaterial({
+                    color: config.color,
+                    roughness: 1.0,
+                    metalness: 0
+                })
+            );
+            rug.position.y = config.height / 2 + 0.001;
+            rug.receiveShadow = true;
+            group.add(rug);
+        }
+        
+        function createSofa(group, config) {
+            // 材质定义
+            const fabricMaterial = new THREE.MeshStandardMaterial({
+                color: config.color,
+                roughness: 0.8,
+                metalness: 0.05
+            });
+            
+            const frameMaterial = new THREE.MeshStandardMaterial({
+                color: new THREE.Color(config.color).multiplyScalar(0.3),
+                roughness: 0.6,
+                metalness: 0.1
+            });
+            
+            // 底座框架
+            const baseFrame = new THREE.Mesh(
+                new RoundedBoxGeometry(config.width, config.height * 0.15, config.depth, 3, 0.01),
+                frameMaterial
+            );
+            baseFrame.position.y = config.height * 0.075;
+            baseFrame.castShadow = true;
+            group.add(baseFrame);
+            
+            // 独立坐垫 (3个)
+            const cushionWidth = (config.width - 0.06) / 3;
+            const cushionHeight = config.height * 0.35;
+            for (let i = 0; i < 3; i++) {
+                const cushion = new THREE.Mesh(
+                    new RoundedBoxGeometry(cushionWidth, cushionHeight, config.depth * 0.85, 4, 0.03),
+                    fabricMaterial
+                );
+                cushion.position.set(
+                    -config.width / 2 + cushionWidth / 2 + i * (cushionWidth + 0.02),
+                    config.height * 0.15 + cushionHeight / 2,
+                    0
+                );
+                cushion.castShadow = true;
+                group.add(cushion);
+            }
+            
+            // 靠背 (略微后倾)
+            const backHeight = config.height * 0.65;
+            const backThickness = config.depth * 0.12;
+            const backrest = new THREE.Mesh(
+                new RoundedBoxGeometry(config.width, backHeight, backThickness, 4, 0.025),
+                fabricMaterial
+            );
+            backrest.position.set(
+                0,
+                config.height * 0.15 + backHeight / 2,
+                -config.depth / 2 + backThickness / 2 + 0.02
+            );
+            backrest.rotation.x = -0.05; // 轻微后倾
+            backrest.castShadow = true;
+            group.add(backrest);
+            
+            // 扶手 (左右对称)
+            const armWidth = config.depth * 0.15;
+            const armHeight = config.height * 0.55;
+            [-1, 1].forEach(side => {
+                const arm = new THREE.Mesh(
+                    new RoundedBoxGeometry(armWidth, armHeight, config.depth * 0.9, 4, 0.025),
+                    fabricMaterial
+                );
+                arm.position.set(
+                    side * (config.width / 2 - armWidth / 2),
+                    config.height * 0.15 + armHeight / 2,
+                    0
+                );
+                arm.castShadow = true;
+                group.add(arm);
+            });
+        }
+        
+        function createBed(group, config) {
+            // 材质定义
+            const woodMaterial = new THREE.MeshStandardMaterial({
+                color: new THREE.Color(config.color).multiplyScalar(0.4),
+                roughness: 0.6,
+                metalness: 0.1
+            });
+            
+            const linenMaterial = new THREE.MeshStandardMaterial({
+                color: 0xFAFAF0,
+                roughness: 0.9,
+                metalness: 0.02
+            });
+            
+            const duvetMaterial = new THREE.MeshStandardMaterial({
+                color: config.color,
+                roughness: 0.85,
+                metalness: 0.03
+            });
+            
+            // 床架底座
+            const frameHeight = config.height * 0.25;
+            const frame = new THREE.Mesh(
+                new RoundedBoxGeometry(config.width, frameHeight, config.depth, 3, 0.015),
+                woodMaterial
+            );
+            frame.position.y = frameHeight / 2;
+            frame.castShadow = true;
+            group.add(frame);
+            
+            // 床头板
+            const headboardHeight = config.height * 1.5;
+            const headboardThickness = 0.08;
+            const headboard = new THREE.Mesh(
+                new RoundedBoxGeometry(config.width, headboardHeight, headboardThickness, 4, 0.02),
+                woodMaterial
+            );
+            headboard.position.set(0, frameHeight + headboardHeight / 2, -config.depth / 2 + headboardThickness / 2);
+            headboard.castShadow = true;
+            group.add(headboard);
+            
+            // 床头软包
+            const upholsteredPanel = new THREE.Mesh(
+                new RoundedBoxGeometry(config.width * 0.85, headboardHeight * 0.6, 0.04, 4, 0.02),
+                new THREE.MeshStandardMaterial({ color: config.color, roughness: 0.8, metalness: 0.05 })
+            );
+            upholsteredPanel.position.set(0, frameHeight + headboardHeight * 0.4, -config.depth / 2 + 0.04);
+            upholsteredPanel.castShadow = true;
+            group.add(upholsteredPanel);
+            
+            // 床垫
+            const mattressHeight = config.height * 0.35;
+            const mattress = new THREE.Mesh(
+                new RoundedBoxGeometry(config.width * 0.96, mattressHeight, config.depth * 0.96, 4, 0.03),
+                linenMaterial
+            );
+            mattress.position.y = frameHeight + mattressHeight / 2;
+            mattress.castShadow = true;
+            group.add(mattress);
+            
+            // 枕头 (2个)
+            const pillowWidth = config.width * 0.3;
+            const pillowHeight = 0.15;
+            const pillowDepth = 0.45;
+            [-1, 1].forEach(side => {
+                const pillow = new THREE.Mesh(
+                    new RoundedBoxGeometry(pillowWidth, pillowHeight, pillowDepth, 4, 0.04),
+                    linenMaterial
+                );
+                pillow.position.set(
+                    side * config.width * 0.25,
+                    frameHeight + mattressHeight + pillowHeight / 2,
+                    -config.depth / 2 + pillowDepth / 2 + 0.1
+                );
+                pillow.castShadow = true;
+                group.add(pillow);
+            });
+            
+            // 被子 (覆盖床尾)
+            const duvetWidth = config.width * 0.95;
+            const duvetDepth = config.depth * 0.6;
+            const duvetThickness = 0.1;
+            const duvet = new THREE.Mesh(
+                new RoundedBoxGeometry(duvetWidth, duvetThickness, duvetDepth, 4, 0.03),
+                duvetMaterial
+            );
+            duvet.position.set(
+                0,
+                frameHeight + mattressHeight + duvetThickness / 2,
+                config.depth / 2 - duvetDepth / 2 - 0.05
+            );
+            duvet.castShadow = true;
+            group.add(duvet);
+        }
+        
+        function createTable(group, config) {
+            const woodMaterial = new THREE.MeshStandardMaterial({
+                color: config.color,
+                roughness: 0.4,
+                metalness: 0.1
+            });
+            
+            // 桌面 (带厚度和圆角)
+            const topThickness = config.height * 0.08;
+            const top = new THREE.Mesh(
+                new RoundedBoxGeometry(config.width, topThickness, config.depth, 4, 0.015),
+                woodMaterial
+            );
+            top.position.y = config.height - topThickness / 2;
+            top.castShadow = true;
+            group.add(top);
+            
+            // 桌腿 (下细上粗，北欧风)
+            const legHeight = config.height * 0.88;
+            const legTopRadius = 0.035;
+            const legBottomRadius = 0.025;
+            const legPositions = [
+                [-config.width / 2 + 0.12, legHeight / 2, -config.depth / 2 + 0.12],
+                [config.width / 2 - 0.12, legHeight / 2, -config.depth / 2 + 0.12],
+                [-config.width / 2 + 0.12, legHeight / 2, config.depth / 2 - 0.12],
+                [config.width / 2 - 0.12, legHeight / 2, config.depth / 2 - 0.12]
+            ];
+            
+            legPositions.forEach(pos => {
+                const leg = new THREE.Mesh(
+                    new THREE.CylinderGeometry(legTopRadius, legBottomRadius, legHeight, 16),
+                    woodMaterial
+                );
+                leg.position.set(pos[0], pos[1], pos[2]);
+                leg.castShadow = true;
+                group.add(leg);
+            });
+            
+            // 横梁加固 (增加稳定感)
+            const braceWidth = 0.03;
+            const braceDepth = 0.02;
+            const braceLength = config.width - 0.3;
+            [config.depth / 2 - 0.15, -config.depth / 2 + 0.15].forEach(z => {
+                const brace = new THREE.Mesh(
+                    new RoundedBoxGeometry(braceLength, braceDepth, braceWidth, 2, 0.005),
+                    woodMaterial
+                );
+                brace.position.set(0, legHeight * 0.3, z);
+                brace.castShadow = true;
+                group.add(brace);
+            });
+        }
+        
+        function createDefaultBox(group, config) {
+            // 根据家具类型使用不同的处理
+            let material;
+            let radius = 0.02;
+            
+            switch(config.type) {
+                case 'wardrobe':
+                case 'shelf':
+                case 'tv-stand':
+                    // 储物家具：木质材质 + 门缝细节
+                    material = new THREE.MeshStandardMaterial({
+                        color: config.color,
+                        roughness: 0.5,
+                        metalness: 0.1
+                    });
+                    
+                    // 主体
+                    const body = new THREE.Mesh(
+                        new RoundedBoxGeometry(config.width, config.height, config.depth, 4, radius),
+                        material
+                    );
+                    body.position.y = config.height / 2;
+                    body.castShadow = true;
+                    group.add(body);
+                    
+                    // 门缝（分成两扇门）
+                    if (config.type === 'wardrobe' || config.type === 'tv-stand') {
+                        const doorGap = 0.005;
+                        const doorWidth = (config.width - doorGap) / 2;
+                        const doorThickness = 0.03;
+                        
+                        [-1, 1].forEach(side => {
+                            const door = new THREE.Mesh(
+                                new RoundedBoxGeometry(doorWidth, config.height * 0.9, doorThickness, 3, 0.015),
+                                new THREE.MeshStandardMaterial({
+                                    color: new THREE.Color(config.color).multiplyScalar(0.95),
+                                    roughness: 0.4,
+                                    metalness: 0.15
+                                })
+                            );
+                            door.position.set(
+                                side * (doorWidth / 2 + doorGap / 2),
+                                config.height / 2,
+                                config.depth / 2 + doorThickness / 2
+                            );
+                            door.castShadow = true;
+                            group.add(door);
+                            
+                            // 把手
+                            const handle = new THREE.Mesh(
+                                new THREE.CylinderGeometry(0.008, 0.008, 0.06, 12),
+                                new THREE.MeshStandardMaterial({
+                                    color: 0x888888,
+                                    roughness: 0.3,
+                                    metalness: 0.8
+                                })
+                            );
+                            handle.rotation.z = Math.PI / 2;
+                            handle.position.set(
+                                side * (doorWidth * 0.4),
+                                config.height / 2,
+                                config.depth / 2 + doorThickness + 0.015
+                            );
+                            handle.castShadow = true;
+                            group.add(handle);
+                        });
+                    }
+                    break;
+                    
+                case 'chair':
+                case 'armchair':
+                    // 椅子：简化版布艺座椅
+                    const chairMaterial = new THREE.MeshStandardMaterial({
+                        color: config.color,
+                        roughness: 0.8,
+                        metalness: 0.05
+                    });
+                    
+                    // 座位
+                    const seat = new THREE.Mesh(
+                        new RoundedBoxGeometry(config.width, config.height * 0.15, config.depth, 4, 0.025),
+                        chairMaterial
+                    );
+                    seat.position.y = config.height * 0.5;
+                    seat.castShadow = true;
+                    group.add(seat);
+                    
+                    // 靠背
+                    const backHeight = config.height * 0.6;
+                    const backrest = new THREE.Mesh(
+                        new RoundedBoxGeometry(config.width, backHeight, config.depth * 0.1, 4, 0.02),
+                        chairMaterial
+                    );
+                    backrest.position.set(0, config.height * 0.5 + backHeight / 2, -config.depth / 2 + config.depth * 0.05);
+                    backrest.rotation.x = -0.1;
+                    backrest.castShadow = true;
+                    group.add(backrest);
+                    
+                    // 腿
+                    const legHeight = config.height * 0.45;
+                    const legPositions = [
+                        [-config.width / 2 + 0.05, legHeight / 2, -config.depth / 2 + 0.05],
+                        [config.width / 2 - 0.05, legHeight / 2, -config.depth / 2 + 0.05],
+                        [-config.width / 2 + 0.05, legHeight / 2, config.depth / 2 - 0.05],
+                        [config.width / 2 - 0.05, legHeight / 2, config.depth / 2 - 0.05]
+                    ];
+                    
+                    legPositions.forEach(pos => {
+                        const leg = new THREE.Mesh(
+                            new THREE.CylinderGeometry(0.02, 0.015, legHeight, 12),
+                            new THREE.MeshStandardMaterial({
+                                color: new THREE.Color(config.color).multiplyScalar(0.3),
+                                roughness: 0.6,
+                                metalness: 0.1
+                            })
+                        );
+                        leg.position.set(pos[0], pos[1], pos[2]);
+                        leg.castShadow = true;
+                        group.add(leg);
+                    });
+                    break;
+                    
+                case 'floor-lamp':
+                    // 落地灯
+                    const metalMaterial = new THREE.MeshStandardMaterial({
+                        color: 0x333333,
+                        roughness: 0.3,
+                        metalness: 0.8
+                    });
+                    
+                    // 底座
+                    const base = new THREE.Mesh(
+                        new THREE.CylinderGeometry(config.width / 2, config.width / 2 + 0.02, 0.03, 20),
+                        metalMaterial
+                    );
+                    base.position.y = 0.015;
+                    base.castShadow = true;
+                    group.add(base);
+                    
+                    // 灯杆
+                    const pole = new THREE.Mesh(
+                        new THREE.CylinderGeometry(0.015, 0.015, config.height * 0.8, 16),
+                        metalMaterial
+                    );
+                    pole.position.y = config.height * 0.4 + 0.03;
+                    pole.castShadow = true;
+                    group.add(pole);
+                    
+                    // 灯罩
+                    const shade = new THREE.Mesh(
+                        new THREE.ConeGeometry(config.width * 1.2, config.height * 0.3, 24),
+                        new THREE.MeshStandardMaterial({ 
+                            color: 0xFFF8E1, 
+                            emissive: 0xFFE082, 
+                            emissiveIntensity: 0.5,
+                            side: THREE.DoubleSide
+                        })
+                    );
+                    shade.position.y = config.height - config.height * 0.15;
+                    shade.castShadow = true;
+                    group.add(shade);
+                    break;
+                    
+                case 'plant':
+                    // 盆栽植物
+                    const potMaterial = new THREE.MeshStandardMaterial({
+                        color: 0x8B7355,
+                        roughness: 0.8,
+                        metalness: 0.1
+                    });
+                    
+                    // 花盆
+                    const pot = new THREE.Mesh(
+                        new THREE.CylinderGeometry(config.width / 2 * 0.8, config.width / 2, config.height * 0.3, 20),
+                        potMaterial
+                    );
+                    pot.position.y = config.height * 0.15;
+                    pot.castShadow = true;
+                    group.add(pot);
+                    
+                    // 植物 (简化的球形丛)
+                    const foliageMaterial = new THREE.MeshStandardMaterial({
+                        color: 0x2D5016,
+                        roughness: 0.9,
+                        metalness: 0.0
+                    });
+                    
+                    const foliage = new THREE.Mesh(
+                        new THREE.SphereGeometry(config.width / 2 * 1.2, 12, 12),
+                        foliageMaterial
+                    );
+                    foliage.position.y = config.height * 0.6;
+                    foliage.castShadow = true;
+                    group.add(foliage);
+                    break;
+                    
+                default:
+                    // 默认圆角盒子
+                    const defaultMesh = new THREE.Mesh(
+                        new RoundedBoxGeometry(config.width, config.height, config.depth, 4, radius),
+                        new THREE.MeshStandardMaterial({ 
+                            color: config.color, 
+                            roughness: 0.6,
+                            metalness: 0.1
+                        })
+                    );
+                    defaultMesh.position.y = config.height / 2;
+                    defaultMesh.castShadow = true;
+                    group.add(defaultMesh);
+            }
+        }
+        
+        function generateFurnitureUI() {
+            const container = document.getElementById('furniture-list');
+            const categories = {
+                '沙发床': ['sofa', 'l-sofa', 'bed'],
+                '桌椅': ['table', 'coffeeTable', 'desk-setup', 'chair', 'armchair'],
+                '储物': ['wardrobe', 'shelf', 'tv-stand'],
+                '装饰': ['floor-lamp', 'plant', 'round-rug']
+            };
+            
+            Object.entries(categories).forEach(([catName, types]) => {
+                const categoryDiv = document.createElement('div');
+                categoryDiv.className = 'mb-3';
+                
+                const header = document.createElement('button');
+                header.className = 'w-full p-2 rounded-lg bg-gray-700 text-white text-left font-semibold flex items-center justify-between';
+                header.innerHTML = `<span>📂 ${catName}</span><span class="arrow">▶</span>`;  // 默认折叠箭头
+                
+                const itemsContainer = document.createElement('div');
+                itemsContainer.className = 'mt-2 space-y-1';
+                itemsContainer.style.display = 'none';  // 默认折叠
+                
+                furnitureConfigs
+                    .filter(c => types.includes(c.type))
+                    .forEach(config => {
+                        const btn = document.createElement('button');
+                        btn.className = 'btn-furniture w-full p-2.5 rounded-lg bg-gray-800 text-white text-left';
+                        btn.innerHTML = `<div class="flex justify-between"><span class="text-sm">${config.name}</span><span class="text-xs text-gray-400">${config.width}m × ${config.depth}m</span></div>`;
+                        btn.addEventListener('click', () => addFurniture(config));
+                        itemsContainer.appendChild(btn);
+                    });
+                
+                header.addEventListener('click', () => {
+                    const isExpanded = itemsContainer.style.display !== 'none';
+                    itemsContainer.style.display = isExpanded ? 'none' : 'block';
+                    header.querySelector('.arrow').textContent = isExpanded ? '▶' : '▼';
+                });
+                
+                categoryDiv.appendChild(header);
+                categoryDiv.appendChild(itemsContainer);
+                container.appendChild(categoryDiv);
+            });
+        }
+        
+        function setupEventListeners() {
+            console.log('%c [v4.1] 修复高度锁定 Bug ', 'background: #222; color: #00FF00; font-size: 20px');
+            
+            // ==================== TransformControl 事件监听 ====================
+            transformControl.addEventListener('dragging-changed', function(event) {
+                controls.enabled = !event.value;
+            });
+            
+            transformControl.addEventListener('objectChange', function() {
+                if (selectedObject && transformControl.object) {
+                    
+                    // === Step 1: 地面吸附 (Auto-Snap) ===
+                    const box = new THREE.Box3().setFromObject(selectedObject);
+                    const minY = box.min.y;
+                    
+                    // 如果物体底部在地面10cm范围内，自动吸附到地面
+                    if (Math.abs(minY) < 0.1) {
+                        const offset = -minY; // 需要抬升的高度
+                        selectedObject.position.y += offset;
+                    }
+                    
+                    // 实时更新当前高度
+                    selectedObject.userData.currentHeight = transformControl.object.position.y;
+                    
+                    // === Step 2: 碰撞和地下检测 ===
+                    const isColliding = checkCollision(selectedObject);
+                    const isUnderground = checkUnderground(selectedObject);
+                    
+                    // === Step 3: 分级反馈系统 ===
+                    if (isColliding) {
+                        // Priority 1: XZ平面碰撞 -> 红色警告
+                        showCollisionWarning(true);
+                        showUndergroundWarning(false);
+                        
+                        // 物体变红
+                        selectedObject.traverse(child => {
+                            if (child.isMesh && child.material) {
+                                if (!child.userData.materialCloned) {
+                                    child.material = child.material.clone();
+                                    child.userData.materialCloned = true;
+                                }
+                                if (!child.userData.originalEmissive) {
+                                    child.userData.originalEmissive = child.material.emissive.clone();
+                                    child.userData.originalEmissiveIntensity = child.material.emissiveIntensity;
+                                }
+                                child.material.emissive.setHex(0xFF0000);
+                                child.material.emissiveIntensity = 0.5;
+                            }
+                        });
+                        
+                    } else if (isUnderground) {
+                        // Priority 2: 地下警告 -> 黄色提示，物体保持原色
+                        showCollisionWarning(false);
+                        showUndergroundWarning(true);
+                        
+                        // 恢复物体原色（不变红）
+                        selectedObject.traverse(child => {
+                            if (child.isMesh && child.material) {
+                                if (!child.userData.materialCloned) {
+                                    child.material = child.material.clone();
+                                    child.userData.materialCloned = true;
+                                }
+                                if (child.userData.originalEmissive) {
+                                    child.material.emissive.copy(child.userData.originalEmissive);
+                                    child.material.emissiveIntensity = child.userData.originalEmissiveIntensity || 0;
+                                    delete child.userData.originalEmissive;
+                                    delete child.userData.originalEmissiveIntensity;
+                                } else if (child.userData.originalEmissiveSelection) {
+                                    // 保持选中高亮
+                                    child.material.emissive.setHex(0xFFAA00);
+                                    child.material.emissiveIntensity = 0.3;
+                                } else {
+                                    child.material.emissive.setHex(0x000000);
+                                    child.material.emissiveIntensity = 0;
+                                }
+                            }
+                        });
+                        
+                    } else {
+                        // Priority 3: 正常状态 -> 清除所有警告
+                        showCollisionWarning(false);
+                        showUndergroundWarning(false);
+                        
+                        // 恢复原色
+                        selectedObject.traverse(child => {
+                            if (child.isMesh && child.material) {
+                                if (!child.userData.materialCloned) {
+                                    child.material = child.material.clone();
+                                    child.userData.materialCloned = true;
+                                }
+                                if (child.userData.originalEmissive) {
+                                    child.material.emissive.copy(child.userData.originalEmissive);
+                                    child.material.emissiveIntensity = child.userData.originalEmissiveIntensity || 0;
+                                    delete child.userData.originalEmissive;
+                                    delete child.userData.originalEmissiveIntensity;
+                                } else if (child.userData.originalEmissiveSelection) {
+                                    child.material.emissive.setHex(0xFFAA00);
+                                    child.material.emissiveIntensity = 0.3;
+                                } else {
+                                    child.material.emissive.setHex(0x000000);
+                                    child.material.emissiveIntensity = 0;
+                                }
+                            }
+                        });
+                    }
+                    
+                    // 更新有效位置（仅在无XZ碰撞时）
+                    if (!isColliding) {
+                        lastValidPosition.copy(selectedObject.position);
+                    }
+                }
+            });
+            
+            // ==================== UI 事件监听 ====================
+            window.closeWelcomeGuide = () => {
+                document.getElementById('welcome-guide').style.display = 'none';
+                if (window.innerWidth < 768) {
+                    toggleDrawer();
+                }
+            };
+            
+            window.toggleDrawer = () => {
+                const drawer = document.getElementById('furniture-panel');
+                const overlay = document.getElementById('drawer-overlay');
+                drawer.classList.toggle('open');
+                
+                if (drawer.classList.contains('open')) {
+                    overlay.style.display = 'block';
+                    setTimeout(() => overlay.classList.add('show'), 10);
+                } else {
+                    overlay.classList.remove('show');
+                    setTimeout(() => overlay.style.display = 'none', 300);
+                }
+            };
+            
+            window.switchTab = (tabName) => {
+                document.querySelectorAll('.tab-btn').forEach(btn => {
+                    btn.classList.remove('bg-blue-600', 'text-white');
+                    btn.classList.add('text-gray-400');
+                });
+                document.getElementById(`tab-${tabName}`).classList.add('bg-blue-600', 'text-white');
+                document.getElementById(`tab-${tabName}`).classList.remove('text-gray-400');
+                
+                document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+                document.getElementById(`content-${tabName}`).style.display = 'block';
+            };
+            
+            // 绑定按钮事件
+            const startBtn = document.getElementById('start-btn');
+            if(startBtn) startBtn.onclick = window.closeWelcomeGuide;
+
+            const mobileBtn = document.getElementById('mobile-menu-btn');
+            if(mobileBtn) mobileBtn.onclick = window.toggleDrawer;
+
+            const closeDrawerBtn = document.getElementById('close-drawer-btn');
+            if(closeDrawerBtn) closeDrawerBtn.onclick = window.toggleDrawer;
+
+            const drawerOverlay = document.getElementById('drawer-overlay');
+            if(drawerOverlay) drawerOverlay.onclick = window.toggleDrawer;
+            
+            const tabFurniture = document.getElementById('tab-furniture');
+            if(tabFurniture) tabFurniture.onclick = () => window.switchTab('furniture');
+
+            const tabScene = document.getElementById('tab-scene');
+            if(tabScene) tabScene.onclick = () => window.switchTab('scene');
+
+            // 房间尺寸改变
+            const roomSizeSelect = document.getElementById('room-size');
+            if(roomSizeSelect) roomSizeSelect.onchange = (e) => {
+                currentRoomSize = e.target.value;
+                const customInputs = document.getElementById('custom-room-inputs');
+                if (currentRoomSize === 'custom') {
+                    customInputs.style.display = 'block';
+                    document.getElementById('custom-width').value = roomSizes.custom.width;
+                    document.getElementById('custom-depth').value = roomSizes.custom.depth;
+                    document.getElementById('custom-height').value = roomSizes.custom.height;
+                } else {
+                    customInputs.style.display = 'none';
+                    createProceduralRoom();
+                }
+            };
+            
+            // 应用自定义房间
+            const applyCustomRoomBtn = document.getElementById('apply-custom-room');
+            if(applyCustomRoomBtn) applyCustomRoomBtn.onclick = () => {
+                const width = parseFloat(document.getElementById('custom-width').value);
+                const depth = parseFloat(document.getElementById('custom-depth').value);
+                const height = parseFloat(document.getElementById('custom-height').value);
+                if (width < 2 || width > 20 || depth < 2 || depth > 20 || height < 2 || height > 5) {
+                    alert('⚠️ 尺寸超出范围！'); return;
+                }
+                roomSizes.custom = { width, depth, height };
+                currentRoomSize = 'custom';
+                createProceduralRoom();
+            };
+            
+            // 开关房间/人/声音
+            document.getElementById('toggle-room').onchange = (e) => { showRoom = e.target.checked; showRoom ? createProceduralRoom() : clearProceduralRoom(); };
+            document.getElementById('toggle-person').onchange = (e) => { e.target.checked ? createReferencePerson() : clearReferencePerson(); };
+            document.getElementById('toggle-sound').onchange = (e) => { soundManager.enabled = e.target.checked; };
+            
+            // 清空
+            document.getElementById('clear-scene').onclick = () => {
+                if (confirm('确定清空所有家具？')) {
+                    furnitureObjects.forEach(obj => scene.remove(obj));
+                    furnitureObjects = [];
+                }
+            };
+            
+            // 导出图片
+            document.getElementById('export-image').onclick = () => {
+                takeScreenshot();
+            };
+            
+            // 全局点击 (音效初始化 + 射线检测)
+            let soundInitialized = false;
+            window.onclick = (event) => {
+                if (!soundInitialized) { soundManager.init(); soundInitialized = true; }
+                if (event.target.closest('.panel')) return;
+                
+                const selectionMenu = document.getElementById('selection-menu');
+                if (event.target.closest('#selection-menu')) return;
+                selectionMenu.style.display = 'none';
+                
+                // 只有点击 canvas 区域才触发选中逻辑
+                if (event.target.tagName !== 'CANVAS') return;
+
+                const mouse = new THREE.Vector2();
+                mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+                mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+                
+                const raycaster = new THREE.Raycaster();
+                raycaster.setFromCamera(mouse, camera);
+                const intersects = raycaster.intersectObjects(scene.children, true);
+                
+                const candidateObjects = [];
+                const seenObjects = new Set();
+                
+                for (let intersect of intersects) {
+                    let obj = intersect.object;
+                    while (obj.parent && !furnitureObjects.includes(obj)) { obj = obj.parent; }
+                    if (furnitureObjects.includes(obj) && !seenObjects.has(obj)) {
+                        candidateObjects.push(obj);
+                        seenObjects.add(obj);
+                    }
+                }
+                
+                if (candidateObjects.length === 0) {
+                    deselectObject();
+                } else if (candidateObjects.length === 1) {
+                    selectObject(candidateObjects[0]);
+                    soundManager.playSelect();
+                } else {
+                    showSelectionMenu(candidateObjects, event.clientX, event.clientY);
+                }
+            };
+            
+            // 工具栏按钮
+            document.getElementById('btn-delete').onclick = () => { if (selectedObject) { deleteSelectedObject(); soundManager.playPop(); } };
+            document.getElementById('btn-ground').onclick = () => { resetToGround(); };
+            
+            // 键盘
+            window.onkeydown = (e) => {
+                if ((e.key === 'Delete' || e.key === 'Backspace') && selectedObject) {
+                    deleteSelectedObject();
+                }
+            };
+            
+            window.onresize = () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            };
+            
+            // 自定义生成器
+            const customHeader = document.getElementById('custom-spawner-header');
+            if(customHeader) customHeader.onclick = () => {
+                const content = document.getElementById('custom-spawner-content');
+                const arrow = document.querySelector('.custom-arrow');
+                const isExpanded = content.style.display !== 'none';
+                content.style.display = isExpanded ? 'none' : 'block';
+                arrow.textContent = isExpanded ? '▶' : '▼';
+            };
+            
+            const spawnCustomBtn = document.getElementById('spawn-custom-btn');
+            if(spawnCustomBtn) spawnCustomBtn.onclick = () => {
+                const valW = parseFloat(document.getElementById('custom-w').value);
+                const valD = parseFloat(document.getElementById('custom-d').value);
+                const valH = parseFloat(document.getElementById('custom-h').value);
+                if (isNaN(valW)) return;
+                const customConfig = {
+                    id: 'custom-' + Date.now(), name: `自定义 ${valW}×${valD}m`, type: 'custom',
+                    width: valW, height: valH, depth: valD, color: 0xE0E0E0
+                };
+                addFurniture(customConfig);
+            };
+        }
+        
+        // ==================== 辅助函数 ====================
+        function selectObject(object) {
+            // 清除上一个选中的高亮
+            if (selectedObject && selectedObject !== object) {
+                clearObjectHighlight(selectedObject);
+            }
+            
+            selectedObject = object;
+            transformControl.attach(object);
+            lastValidPosition.copy(object.position);
+            
+            // 确保显示XYZ三个轴
+            transformControl.showX = true;
+            transformControl.showY = true;
+            transformControl.showZ = true;
+            
+            // 金黄色高亮
+            selectedObject.traverse(child => {
+                if (child.isMesh && child.material) {
+                    if (!child.userData.materialCloned) {
+                        child.material = child.material.clone();
+                        child.userData.materialCloned = true;
+                    }
+                    child.userData.originalEmissiveSelection = child.material.emissive.clone();
+                    child.material.emissive.setHex(0xFFAA00);
+                    child.material.emissiveIntensity = 0.3;
+                }
+            });
+            
+            // 显示工具栏
+            document.getElementById('context-toolbar').style.display = 'flex';
+            updateContextToolbar();
+        }
+        
+        function deselectObject() {
+            if (selectedObject) {
+                clearObjectHighlight(selectedObject);
+                transformControl.detach();
+                selectedObject = null;
+                document.getElementById('context-toolbar').style.display = 'none';
+            }
+        }
+        
+        function clearObjectHighlight(object) {
+            object.traverse(child => {
+                if (child.isMesh && child.material && child.userData.originalEmissiveSelection) {
+                    child.material.emissive.copy(child.userData.originalEmissiveSelection);
+                    child.material.emissiveIntensity = 0;
+                    delete child.userData.originalEmissiveSelection;
+                }
+            });
+        }
+        
+        function deleteSelectedObject() {
+            if (!selectedObject) return;
+            
+            scene.remove(selectedObject);
+            const idx = furnitureObjects.indexOf(selectedObject);
+            if (idx > -1) furnitureObjects.splice(idx, 1);
+            
+            transformControl.detach();
+            selectedObject = null;
+            document.getElementById('context-toolbar').style.display = 'none';
+        }
+        
+        function resetToGround() {
+            if (!selectedObject) return;
+            
+            // 对于GLB模型（如女仆），使用其原始Y值（已经包含了底部偏移）
+            // 对于程序生成的家具，使用0
+            const groundY = selectedObject.userData.originalY !== undefined ? selectedObject.userData.originalY : 0;
+            selectedObject.position.y = groundY;
+            selectedObject.userData.currentHeight = groundY;
+            
+            // 更新有效位置
+            lastValidPosition.copy(selectedObject.position);
+            
+            // 播放音效反馈
+            soundManager.playPop();
+            
+            console.log(`⬇️ ${selectedObject.userData.furnitureName} 已回到地面 (Y=${groundY.toFixed(3)}m)`);
+        }
+        
+        function showSelectionMenu(objects, x, y) {
+            const menu = document.getElementById('selection-menu');
+            menu.innerHTML = '';
+            
+            // 标题
+            const header = document.createElement('div');
+            header.className = 'selection-menu-header';
+            header.textContent = `选择物体 (${objects.length})`;
+            menu.appendChild(header);
+            
+            // 菜单项
+            objects.forEach(obj => {
+                const item = document.createElement('div');
+                item.className = 'selection-menu-item';
+                item.textContent = obj.userData.furnitureName || '未命名物体';
+                item.addEventListener('click', () => {
+                    selectObject(obj);
+                    soundManager.playSelect();
+                    menu.style.display = 'none';
+                });
+                menu.appendChild(item);
+            });
+            
+            // 定位
+            menu.style.left = x + 'px';
+            menu.style.top = y + 'px';
+            menu.style.display = 'block';
+        }
+        
+        function updateContextToolbar() {
+            if (!selectedObject) return;
+            
+            const toolbar = document.getElementById('context-toolbar');
+            const vector = new THREE.Vector3();
+            
+            // 获取物体顶部位置
+            const box = new THREE.Box3().setFromObject(selectedObject);
+            vector.set(box.max.x / 2 + box.min.x / 2, box.max.y, box.max.z / 2 + box.min.z / 2);
+            vector.project(camera);
+            
+            // 转为屏幕坐标
+            const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
+            const y = (vector.y * -0.5 + 0.5) * window.innerHeight;
+            
+            toolbar.style.left = x + 'px';
+            toolbar.style.top = y + 'px';
+        }
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            
+            // 更新工具栏位置
+            if (selectedObject) {
+                updateContextToolbar();
+            }
+            
+            renderer.render(scene, camera);
+        }
+        
+        init();
+    </script>
+</body>
+</html>
